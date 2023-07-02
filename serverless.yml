@@ -6,12 +6,80 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: eu-west-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action: dynamodb:*
+      Resource: !GetAtt bookTable.Arn
+    - Effect: Allow
+      Action: dynamodb:*
+      Resource: !GetAtt userTable.Arn  
 
 plugins:
   - serverless-step-functions
 
+
 functions:
-  hello:
-    handler: handler.hello
+  checkInventory:
+    handler: handler.checkInventory
+  calculateTotal:
+    handler: handler.calculateTotal  
 
 
+stepFunctions:
+  stateMachines:
+    storeCheckoutFlow:
+      name: storeCheckoutFlow
+      definition:
+        StartAt: checkInventory
+        States:
+          checkInventory:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [checkInventory,Arn]
+            Catch:
+              - ErrorEquals :  [BookNotFound]
+                Next: BookNotFoundError
+              - ErrorEquals :  [BookOutOfStock]
+                Next: BookOutOfStockError  
+            Next: calculateTotal
+          calculateTotal:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [calculateTotal,Arn]
+            End: true
+          BookNotFoundError:
+            Type: Pass
+            Result: "No such book available"
+            End: true
+          BookOutOfStockError:
+            Type: Pass
+            Result: "Sorry, the book is out of stock"
+            End: true
+
+
+resources:
+  Resources:
+    bookTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: books
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - AttributeName: bookId
+              AttributeType: S
+            
+          KeySchema:
+            - AttributeName: bookId
+              KeyType: 'HASH'
+    userTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: users
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - AttributeName: userId
+              AttributeType: S
+            
+          KeySchema:
+            - AttributeName: userId
+              KeyType: 'HASH'

@@ -19,5 +19,8 @@
   "homepage": "https://github.com/walshe/aws-serverless-step-functions#readme",
   "devDependencies": {
     "serverless-step-functions": "^3.13.1"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1409.0"
   }
 }
