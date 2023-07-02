@@ -1,0 +1,20 @@
+{
+  "name": "aws-serverless-step-functions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/walshe/aws-serverless-step-functions.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/walshe/aws-serverless-step-functions/issues"
+  },
+  "homepage": "https://github.com/walshe/aws-serverless-step-functions#readme"
+}
