@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/walshe/aws-serverless-step-functions/issues"
   },
-  "homepage": "https://github.com/walshe/aws-serverless-step-functions#readme"
+  "homepage": "https://github.com/walshe/aws-serverless-step-functions#readme",
+  "devDependencies": {
+    "serverless-step-functions": "^3.13.1"
+  }
 }

@@ -7,7 +7,11 @@ provider:
   runtime: nodejs18.x
   region: eu-west-1
 
+plugins:
+  - serverless-step-functions
 
 functions:
   hello:
     handler: handler.hello
+
+
