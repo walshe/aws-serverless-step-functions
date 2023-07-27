@@ -106,7 +106,7 @@ stepFunctions:
             Next: PrepareOrder
           PrepareOrder:
             Type: Task
-            Resource: arn:aws:states:::sqs:sendMessage.waitForTaskToken #wait
+            Resource: arn:aws:states:::sqs:sendMessage.waitForTaskToken #wait when you append .waitForTaskToken to a Task state’s resource, an opaque token is generated for you to pass to another service. For example, you could include the token in the message you’re sending to an SQS queue. The Step Function will then pause until a task success or failure API call is made containing the token. The callback also contains a JSON string that becomes the output of the Task state. https://zaccharles.medium.com/async-callbacks-with-aws-step-functions-and-task-tokens-9df97fe8973c
             Parameters:
               QueueUrl: !Ref OrdersSQS
               MessageBody:
@@ -180,7 +180,7 @@ resources:
     SNSEmailSubscription:
       Type: AWS::SNS::Subscription
       Properties:
-        Endpoint: "emmettwalsh@gmail.com"
+        Endpoint: "todo@gmail.com"
         Protocol: "email"
         TopicArn: !Ref NotifyCourierSNS
         
