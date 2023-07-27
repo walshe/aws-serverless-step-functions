@@ -13,6 +13,18 @@ provider:
     - Effect: Allow
       Action: dynamodb:*
       Resource: !GetAtt userTable.Arn  
+    - Effect: Allow
+      Action: sqs:*
+      Resource: !GetAtt OrdersSQS.Arn
+    - Effect: "Allow"
+      Action:
+        - "states:*"
+      Resource:
+        - "*"
+    # - Effect: Allow
+    #   Action: states:*
+    #   Resource: !GetAtt storeCheckoutFlow.Arn
+
 
 plugins:
   - serverless-step-functions
@@ -23,6 +35,20 @@ functions:
     handler: handler.checkInventory
   calculateTotal:
     handler: handler.calculateTotal  
+  redeemPoints:
+    handler: handler.redeemPoints    
+  restoreRedeemPoints:
+    handler: handler.restoreRedeemPoints
+  restoreQuantity:  
+    handler: handler.restoreQuantity
+  billCustomer:
+    handler: handler.billCustomer
+  sqsWorker:
+    handler: handler.sqsWorker
+    events:
+      - sqs:
+          arn: !GetAtt OrdersSQS.Arn 
+          batchSize: 1
 
 
 stepFunctions:
@@ -40,13 +66,81 @@ stepFunctions:
               - ErrorEquals :  [BookNotFound]
                 Next: BookNotFoundError
               - ErrorEquals :  [BookOutOfStock]
-                Next: BookOutOfStockError  
+                Next: BookOutOfStockError 
+            ResultPath: "$.book"
             Next: calculateTotal
           calculateTotal:
             Type: Task
             Resource:
               Fn::GetAtt: [calculateTotal,Arn]
+            ResultPath: "$.total"
+            Next: isRedeemNeeded
+          isRedeemNeeded:
+            Type: Choice
+            Choices:
+              - Variable: $.redeem
+                BooleanEquals: true
+                Next: RedeemPoints
+            Default: BillCustomer
+          RedeemPoints:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [redeemPoints,Arn]
+            ResultPath: "$.total"
+            Catch: 
+              - ErrorEquals: [States.ALL]
+                Next: RedeemPointsError
+            Next: BillCustomer
+          BillCustomer:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [billCustomer,Arn]
+            ResultPath: "$.billingStatus"
+            Retry:
+              - ErrorEquals: [States.ALL]
+                MaxAttempts: 3
+            Catch:
+              - ErrorEquals: [States.ALL]
+                ResultPath: "$.customerBilling"
+                Next: BillingError
+            Next: PrepareOrder
+          PrepareOrder:
+            Type: Task
+            Resource: arn:aws:states:::sqs:sendMessage.waitForTaskToken #wait
+            Parameters:
+              QueueUrl: !Ref OrdersSQS
+              MessageBody:
+                Input.$: "$"  #entire message obj
+                Token.$: "$$.Task.Token" #$$ is the context of the state machine
+            ResultPath: "$.courierStatus"
+            Catch:
+              - ErrorEquals: [NoCourierAvailable]
+                ResultPath: "$.courierError"
+                Next: RefundCustomer
+            Next: DispatchOrder
+          DispatchOrder:
+            Type: Task
+            Resource: arn:aws:states:::sns:publish
+            Parameters:
+              TopicArn: !Ref NotifyCourierSNS #!GetAtt NotifyCourierSNS.Arn 
+              Message.$ : "$" #entire input object
+            Next: Dispatched  
+          Dispatched:
+            Type : Pass
+            Result : 'Your order will be dispatched in 24 hrs'
             End: true
+          RefundCustomer:
+            Type: Pass
+            Result: "The customer is refunded"
+            ResultPath: "$.refundStatus"
+            Next: RestoreQuantity
+          
+          RestoreQuantity:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [restoreQuantity,Arn]
+            ResultPath: "$.quantityRestoreStatus"
+            Next: RestoreRedeemPoints
           BookNotFoundError:
             Type: Pass
             Result: "No such book available"
@@ -55,10 +149,42 @@ stepFunctions:
             Type: Pass
             Result: "Sorry, the book is out of stock"
             End: true
-
+          RedeemPointsError:
+            Type: Pass
+            Result: 'Error in redeeming points'
+            End: true
+          BillingError:
+            Type: Pass
+            Result: "Billing Error"
+            ResultPath: "$.billingStatus"
+            Next: RestoreRedeemPoints
+          RestoreRedeemPoints:
+            Type: Task
+            Resource: 
+              Fn::GetAtt: [restoreRedeemPoints, Arn]
+            End: true
 
 resources:
   Resources:
+    OrdersSQS:
+      Type: AWS::SQS::Queue
+      Properties: 
+        QueueName: OrdersQueue
+
+    NotifyCourierSNS:
+      Type: AWS::SNS::Topic
+      Properties: 
+        TopicName: NotifyCourier
+
+    # SNS email subscription for upload completion
+    SNSEmailSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Endpoint: "emmettwalsh@gmail.com"
+        Protocol: "email"
+        TopicArn: !Ref NotifyCourierSNS
+        
+
     bookTable:
         Type: AWS::DynamoDB::Table
         Properties:
